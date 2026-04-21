@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Columbia University – Payroll Summary Report (Training)</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root { --columbia: #003087; --hover: #fff3cd; --active: #d0e8ff; --outline: #0056b3; }
+body {
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 10px;
+  color: #111;
+  background: #e8e8e8;
+  display: flex;
+  flex-direction: row;
+  min-height: 100vh;
+  overflow: hidden;
+}
+#report-panel {
+  flex: 1 1 auto;
+  background: #fff;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+#report-static { flex-shrink: 0; background: #fff; z-index: 10; }
+#table-scroll-area { flex: 1 1 auto; overflow: auto; position: relative; }
+
+/* NAV */
+.nav-bar { background: #fff; border-bottom: 1px solid #ccc; padding: 2px 10px 0; display: flex; justify-content: space-between; align-items: center; }
+.nav-bar a { color: #00419e; text-decoration: none; font-size: 10px; font-weight: bold; white-space: nowrap; }
+.nav-bar a:hover { text-decoration: underline; }
+
+/* HEADER */
+.header-top { display: flex; align-items: flex-start; padding: 4px 10px 2px; }
+.logo-area { display: flex; align-items: center; gap: 4px; min-width: 160px; flex-shrink: 0; }
+.logo-crown { font-size: 15px; color: var(--columbia); }
+.logo-text .cu-name { font-size: 9px; font-weight: bold; color: var(--columbia); text-transform: uppercase; letter-spacing: 0.3px; line-height: 1.2; }
+.logo-text .cu-sub  { font-size: 6px; color: var(--columbia); text-transform: uppercase; }
+.center-titles { flex: 1; text-align: center; line-height: 1.5; }
+.center-titles .rpt-link { font-size: 9px; color: #00419e; text-decoration: underline; cursor: pointer; }
+.center-titles .rpt-sub  { font-size: 8px; color: #555; }
+.center-titles .t1 { font-size: 12px; font-weight: bold; }
+.center-titles .t2 { font-size: 11px; font-weight: bold; }
+.run-block { font-size: 9px; text-align: right; white-space: nowrap; line-height: 1.7; }
+.run-block b { font-weight: bold; }
+
+/* FILTER BLOCK */
+.filter-block { padding: 3px 10px 4px; font-size: 9px; line-height: 1.75; border-bottom: 1px solid #999; }
+.filter-block b { font-weight: bold; }
+
+/* PILL BAR */
+.pill-bar-wrap {
+  padding: 4px 10px 3px;
+  border-bottom: 1px solid #ddd;
+  border-top: 1px solid #eee;
+  background: #fafafa;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.pill-bar-label { font-size: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: #999; white-space: nowrap; }
+.pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 10px 2px 7px; border-radius: 100px;
+  border: 1.5px solid #bbb; background: #fff;
+  font-size: 9px; font-weight: bold; cursor: pointer;
+  transition: all 0.15s; user-select: none; color: #444; white-space: nowrap;
+}
+.pill-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.pill:hover { border-color: #555; color: #111; }
+
+.pill[data-pill="who"] .pill-dot      { background: #0e7490; }
+.pill[data-pill="who"].pill-on        { background: #d0f0f8; border-color: #0e7490; color: #0a5c6e; }
+.pill[data-pill="account"] .pill-dot  { background: #003087; }
+.pill[data-pill="account"].pill-on    { background: #dde8ff; border-color: #003087; color: #001a57; }
+.pill[data-pill="salary"] .pill-dot   { background: #c97b00; }
+.pill[data-pill="salary"].pill-on     { background: #fff3d6; border-color: #8a4b00; color: #8a4b00; }
+.pill[data-pill="fringe"] .pill-dot   { background: #7c3aed; }
+.pill[data-pill="fringe"].pill-on     { background: #ede9fe; border-color: #5b21b6; color: #5b21b6; }
+.pill[data-pill="ytd"] .pill-dot      { background: #2a8a2a; }
+.pill[data-pill="ytd"].pill-on        { background: #dff5df; border-color: #1a5c1a; color: #1a5c1a; }
+.pill[data-pill="overview"] .pill-dot { background: #7c8aa5; }
+.pill[data-pill="overview"].pill-on   { background: #eef2f8; border-color: #9aa7bd; color: #46556f; }
+.pill[data-pill="walkthrough"] .pill-dot { background: #4f8fd6; }
+.pill[data-pill="walkthrough"].pill-on { background: #eaf3ff; border-color: #8cb4e3; color: #003087; }
+
+/* S4-STYLE HIGHLIGHT ENGINE */
+@keyframes hlShimmer  { 0%{background-position:-200% center,0 0} 100%{background-position:300% center,0 0} }
+@keyframes hlBeat     { 0%,100%{filter:brightness(1)} 45%{filter:brightness(1.28)} }
+@keyframes hlIn       { from{opacity:0;transform:translateX(4px)} to{opacity:1;transform:translateX(0)} }
+@keyframes glowBreathe{ 0%,100%{opacity:.45} 50%{opacity:1} }
+
+th.hl-hdr {
+  position:relative !important; overflow:hidden !important;
+  background-image: linear-gradient(105deg,rgba(255,255,255,0) 20%,rgba(255,255,255,.55) 50%,rgba(255,255,255,0) 80%), linear-gradient(var(--hl-fill),var(--hl-fill)) !important;
+  background-size:200% 100%,100% 100% !important; background-position:-200% center,0 0 !important;
+  animation:hlShimmer 2.6s ease-in-out infinite !important;
+  border-left:1.5px solid var(--hl-line) !important; border-right:1.5px solid var(--hl-line) !important;
+  border-top:2px solid var(--hl-line) !important; border-bottom:3px solid var(--hl-strong) !important;
+  color:var(--hl-text) !important;
+}
+td.hl-cell {
+  background:var(--hl-cell) !important;
+  border-left:1px solid var(--hl-soft) !important; border-right:1px solid var(--hl-soft) !important;
+  color:var(--hl-text) !important; font-weight:700 !important;
+  animation:hlBeat 2.8s ease-in-out infinite,hlIn .35s ease both !important;
+}
+.hl-glow-strip {
+  position:absolute; pointer-events:none; z-index:3; top:0;
+  background:radial-gradient(ellipse 60% 55% at 50% 50%, var(--hl-radial-center) 0%, var(--hl-radial-mid) 70%, transparent 100%);
+  animation:glowBreathe 2.8s ease-in-out infinite;
+}
+.hl-glow-strip::before,.hl-glow-strip::after {
+  content:''; position:absolute; top:0; bottom:0; width:2px;
+  background:linear-gradient(180deg,transparent 0%,var(--hl-edge) 8%,var(--hl-edge) 92%,transparent 100%);
+  animation:glowBreathe 2.8s ease-in-out infinite;
+}
+.hl-glow-strip::before{left:0;} .hl-glow-strip::after{right:0;}
+
+/* ── EXPLAIN PANEL ── */
+#explain-panel { width:0; min-width:0; overflow:hidden; background:#fafafa; border-left:3px solid #003087; transition:width .28s ease,min-width .28s ease; display:flex; flex-direction:column; flex-shrink:0; height:100vh; }
+#explain-panel.open { width:310px; min-width:290px; }
+.panel-header { background:#003087; color:#fff; padding:6px 10px; font-size:10px; font-weight:bold; display:flex; justify-content:space-between; align-items:center; min-width:290px; flex-shrink:0; }
+.panel-header button { background:none; border:none; color:#fff; cursor:pointer; font-size:13px; }
+.panel-header button:hover { opacity:.7; }
+.panel-tab-hint { font-size:8px; font-weight:normal; opacity:.8; margin-left:8px; white-space:nowrap; }
+#explain-inner { padding:10px; overflow-y:auto; flex:1; min-width:290px; }
+.explain-field-name { font-size:13px; font-weight:bold; color:#003087; margin-bottom:7px; border-bottom:1px solid #ccd; padding-bottom:4px; }
+.explain-section { margin-bottom:8px; }
+.tip-badge { display:inline-block; background:#003087; color:#fff; font-size:8px; font-weight:bold; padding:1px 5px; border-radius:2px; margin-bottom:2px; letter-spacing:.3px; }
+.explain-section-body { font-size:10.5px; color:#222; line-height:1.55; }
+/* Overview panel */
+.overview-panel-wrap { padding:8px 10px 9px; border-bottom:1px solid #d9dfe8; background:#f8fbff; display:none; }
+.overview-panel-wrap.open { display:block; }
+.overview-panel-card { border:1px solid #d4dfef; background:#fff; border-radius:10px; padding:8px 10px; }
+.overview-panel-title { font-size:10px; font-weight:bold; color:#003087; margin-bottom:4px; }
+.overview-panel-body { font-size:9px; line-height:1.55; color:#233; }
+.overview-panel-list { margin-top:5px; padding-left:14px; }
+.overview-panel-list li { margin:1px 0; }
+/* Walkthrough nav */
+.walkthrough-controls { display:flex; gap:6px; margin-top:8px; }
+.walkthrough-mini { padding:3px 8px; border-radius:999px; border:1px solid #b9c9e6; background:#fff; color:#003087; font-size:8px; font-weight:bold; cursor:pointer; }
+.walkthrough-mini:hover { background:#f5f9ff; }
+.psr thead th.clickable { cursor:pointer; transition:background .12s; }
+.psr thead th.clickable:hover { background:#fff3cd; outline:1px solid #e6a817; }
+.psr thead th.clickable.active { background:#d0e8ff; outline:1px solid #0056b3; }
+.table-wrapper { padding: 0 4px 8px; position: relative; min-width: max-content; }
+table.psr { border-collapse: collapse; font-size: 7.5px; white-space: nowrap; }
+.psr thead { position: sticky; top: 0; z-index: 4; }
+.psr thead th {
+  background: #fff; text-align: center; font-weight: bold; font-size: 7px;
+  padding: 1px 2px; border-top: 1px solid #888; border-bottom: 2px solid #888;
+  vertical-align: bottom; line-height: 1.2; white-space: normal;
+  min-width: 38px;
+}
+.psr thead th.lft { text-align: left; }
+.psr tbody td { padding: 1px 2px; vertical-align: top; font-size: 7.5px; text-align: right; }
+.psr tbody td.lft { text-align: left; }
+.psr tbody tr:hover td { background: #f5f5f5; }
+tr.total-row td { font-weight: bold; border-top: 2px solid #333; border-bottom: 3px double #111; }
+tr.total-row td.lft { text-align: right; padding-right: 4px; }
+
+.footnotes { padding: 2px 6px 8px; font-size: 7.5px; color: #444; font-style: italic; }
+.training-badge { position: fixed; bottom: 10px; left: 10px; background: #003087; color: #fff; font-size: 9px; padding: 3px 9px; border-radius: 10px; z-index: 999; }
+</style>
+</head>
+<body>
+<div id="report-panel">
+  <div id="report-static">
+    <!-- NAV -->
+    <div class="nav-bar">
+      <a href="#">&lt; Previous Accounting Period</a>
+      <a href="#">Payroll Detail Report</a>
+      <a href="#">Next Accounting Period &gt;</a>
+    </div>
+
+    <!-- HEADER -->
+    <div class="header-top">
+      <div class="logo-area">
+        <div class="logo-crown">♛</div>
+        <div class="logo-text">
+          <div class="cu-name">Columbia University</div>
+          <div class="cu-sub">In the City of New York</div>
+        </div>
+      </div>
+      <div class="center-titles">
+        <div class="rpt-link">Payroll Detail Report</div>
+        <div class="rpt-sub">Financial Data Store</div>
+        <div class="t1">Columbia University</div>
+        <div class="t2">Payroll Summary Report by Project</div>
+      </div>
+      <div class="run-block">
+        <div><b>Run Date:</b> 4/17/2026</div>
+        <div><b>Run Time:</b> 10:15:30 AM</div>
+      </div>
+    </div>
+
+    <!-- FILTER BLOCK -->
+    <div class="filter-block">
+      <div><b>Month From:</b> July &nbsp; <b>Month Thru:</b> March &nbsp; <b>Fiscal Year:</b> 2026 &nbsp; <b>Combo Code:</b></div>
+      <div><b>Business Unit:</b> COLUM - Columbia University</div>
+      <div><b>Account:</b> ALL &nbsp; <b>Department:</b> ALL</div>
+      <div><b>Project:</b> ALL &nbsp; <b>Project Activity:</b></div>
+      <div><b>Initiative:</b> ALL &nbsp; <b>Segment:</b> ALL &nbsp; <b>Site:</b> ALL &nbsp; <b>Fund:</b> ALL &nbsp; <b>Function:</b> ALL</div>
+    </div>
+
+    <!-- OVERVIEW PANEL — shown when Overview pill is active -->
+    <div class="overview-panel-wrap" id="overview-panel">
+      <div class="overview-panel-card">
+        <div class="overview-panel-title">What this report helps you do</div>
+        <div class="overview-panel-body">
+          The Payroll Summary Report by Project is the primary tool for reviewing how payroll was distributed across projects, accounts, and ChartFields for any employee. Use it to confirm that salary and fringe were charged to the correct place and to understand the full cost picture — past, present, and committed.
+          <ul class="overview-panel-list">
+            <li>verify salary and fringe are charged to the correct project and account</li>
+            <li>review fiscal year-to-date and project-to-date payroll totals</li>
+            <li>see what encumbrances are expected through June 30 or the project end date</li>
+            <li>monitor GRA payroll separately from regular salary and fringe</li>
+            <li>confirm encumbrance dates align with actual appointment periods</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- PILL BAR — hidden, ↑ to activate -->
+    <div class="pill-bar-wrap" id="pill-bar" style="display:none;">
+      <span class="pill-bar-label">Highlight:</span>
+      <div class="pill" data-pill="overview"     onclick="toggleOverviewPill(this)"><span class="pill-dot"></span> What this report helps you do</div>
+      <div class="pill" data-pill="walkthrough"  onclick="startWalkthroughFromPill(this)"><span class="pill-dot"></span> Start Guided Walkthrough</div>
+      <div class="pill" data-pill="who"          onclick="togglePill(this)"><span class="pill-dot"></span> Employee</div>
+      <div class="pill" data-pill="account"      onclick="togglePill(this)"><span class="pill-dot"></span> Account</div>
+      <div class="pill" data-pill="salary"       onclick="togglePill(this)"><span class="pill-dot"></span> Salary</div>
+      <div class="pill" data-pill="fringe"       onclick="togglePill(this)"><span class="pill-dot"></span> Fringe</div>
+      <div class="pill" data-pill="ytd"          onclick="togglePill(this)"><span class="pill-dot"></span> YTD Totals</div>
+    </div>
+  </div><!-- /report-static -->
+
+  <div id="table-scroll-area">
+  <div class="table-wrapper" id="table-wrapper">
+  <table class="psr" id="main-table">
+    <thead>
+      <tr>
+        <th data-key="emp_last_name" data-key="emp_last_name" class="clickable lft col-who">Employee<br>Last Name</th>
+        <th data-key="emp_first_name" data-key="emp_first_name" class="clickable lft col-who">Employee<br>First Name</th>
+        <th data-key="emplid" data-key="emplid" class="clickable col-who">EmplID</th>
+        <th data-key="empl_rcd" data-key="empl_rcd" class="clickable col-who">Empl<br>Rcd</th>
+        <th data-key="uni" data-key="uni" class="clickable col-who">UNI</th>
+        <th data-key="combo_code" data-key="combo_code" class="clickable">Combo<br>Code</th>
+        <th data-key="bu" data-key="bu" class="clickable">BU</th>
+        <th data-key="account" data-key="account" class="clickable col-account">Account</th>
+        <th data-key="account_desc" data-key="account_desc" class="clickable lft col-account">Account Description</th>
+        <th data-key="department" data-key="department" class="clickable">Department</th>
+        <th data-key="dept_desc" data-key="dept_desc" class="clickable lft">Department<br>Description</th>
+        <th data-key="project" data-key="project" class="clickable">Project</th>
+        <th data-key="proj_desc" data-key="proj_desc" class="clickable lft">Project<br>Description</th>
+        <th data-key="proj_activity" data-key="proj_activity" class="clickable">Proj<br>Activity</th>
+        <th data-key="initiative" data-key="initiative" class="clickable">Initiative</th>
+        <th data-key="initiative_desc" data-key="initiative_desc" class="clickable lft">Initiative<br>Description</th>
+        <th data-key="segment" data-key="segment" class="clickable">Segment</th>
+        <th data-key="segment_desc" data-key="segment_desc" class="clickable lft">Segment<br>Description</th>
+        <th data-key="site" data-key="site" class="clickable">Site</th>
+        <th data-key="site_desc" data-key="site_desc" class="clickable lft">Site<br>Description</th>
+        <th data-key="fund" data-key="fund" class="clickable">Fund</th>
+        <th data-key="function" data-key="function" class="clickable">Function</th>
+        <th data-key="function_desc" data-key="function_desc" class="clickable lft">Function<br>Description</th>
+        <th data-key="ptd_salary" data-key="ptd_salary" class="clickable">Period to Date<br>Salary</th>
+        <th data-key="ptd_fringe" data-key="ptd_fringe" class="clickable">Period to Date<br>Fringe</th>
+        <th data-key="ftd_salary" data-key="ftd_salary" class="clickable col-salary">FTD<br>Salary</th>
+        <th data-key="ftd_fringe" data-key="ftd_fringe" class="clickable col-fringe">FTD<br>Fringe</th>
+        <th data-key="ftd_encum_salary" data-key="ftd_encum_salary" class="clickable col-salary">FTD - Encum<br>Salary</th>
+        <th data-key="ftd_encum_fringe" data-key="ftd_encum_fringe" class="clickable col-fringe">FTD - Encum<br>Fringe</th>
+        <th data-key="enc_start_date" data-key="enc_start_date" class="clickable">Encumbrance<br>Start Date</th>
+        <th data-key="enc_end_date" data-key="enc_end_date" class="clickable">Encumbrance<br>End Date</th>
+        <th data-key="ftd_cum_salary" data-key="ftd_cum_salary" class="clickable col-salary">FTD-Cumulative<br>Salary</th>
+        <th data-key="ftd_cum_fringe" data-key="ftd_cum_fringe" class="clickable col-fringe">FTD-Cumulative<br>Fringe</th>
+        <th data-key="ptd2_salary" data-key="ptd2_salary" class="clickable col-ytd">PTD<br>Salary</th>
+        <th data-key="ptd2_fringe" data-key="ptd2_fringe" class="clickable col-ytd">PTD<br>Fringe</th>
+        <th data-key="ptd_encum_salary" data-key="ptd_encum_salary" class="clickable col-ytd">PTD - Encum<br>Salary</th>
+        <th data-key="ptd_encum_fringe" data-key="ptd_encum_fringe" class="clickable col-ytd">PTD - Encum<br>Fringe</th>
+        <th data-key="ptd_cum_salary" data-key="ptd_cum_salary" class="clickable col-ytd">PTD-Cumulative<br>Salary</th>
+        <th data-key="ptd_cum_fringe" data-key="ptd_cum_fringe" class="clickable col-ytd">PTD-Cumulative<br>Fringe</th>
+        <th data-key="proj_act_start" data-key="proj_act_start" class="clickable">Proj Act<br>Start Date</th>
+        <th data-key="proj_act_end" data-key="proj_act_end" class="clickable">Proj Act<br>End Date</th>
+        <th data-key="ptd_gra" data-key="ptd_gra" class="clickable">Period to Date<br>GRA</th>
+        <th data-key="ftd_gra" data-key="ftd_gra" class="clickable col-salary">FTD<br>GRA</th>
+        <th data-key="ftd_encum_gra" data-key="ftd_encum_gra" class="clickable col-salary">FTD - Encum<br>GRA</th>
+        <th data-key="ftd_cum_gra" data-key="ftd_cum_gra" class="clickable col-salary">FTD-Cumulative<br>GRA</th>
+        <th data-key="ptd2_gra" data-key="ptd2_gra" class="clickable col-ytd">PTD<br>GRA</th>
+        <th data-key="ptd_encum_gra" data-key="ptd_encum_gra" class="clickable col-ytd">PTD - Encum<br>GRA</th>
+        <th data-key="ptd_cum_gra" data-key="ptd_cum_gra" class="clickable col-ytd">PTD-Cumulative<br>GRA</th>
+      </tr>
+    </thead>
+    <tbody>
+<tr><td class="lft col-who">MAHOMES</td><td class="lft col-who">PATRICK</td><td class="col-who">30148822</td><td class="col-who">0</td><td class="col-who">pm2847</td><td>1000481201</td><td>COLUM</td><td class="col-account">53300</td><td class="lft col-account">Officer of Administration</td><td>5201234</td><td class="lft">ENG Training Initiative</td><td>UR012345</td><td class="lft">ENG Training</td><td>01</td><td>29214</td><td class="lft">ENG High School Programs</td><td>52000167</td><td class="lft">ENG Staff General</td><td></td><td class="lft"></td><td>01</td><td>210</td><td class="lft">EXTERNAL AFFAIRS &amp; FUNDRAISING</td><td>9,844.62</td><td>2,754.49</td><td class="col-salary">9,844.62</td><td class="col-fringe">2,754.49</td><td class="col-salary">0.00</td><td class="col-fringe">0.00</td><td>09/01/2025</td><td>08/31/2026</td><td class="col-salary">9,844.62</td><td class="col-fringe">2,754.49</td><td class="col-ytd">68,912.34</td><td class="col-ytd">19,295.43</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">68,912.34</td><td class="col-ytd">19,295.43</td><td>07/01/2016</td><td>06/30/2099</td><td>0.00</td><td class="col-salary">0.00</td><td class="col-salary">0.00</td><td class="col-salary">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td></tr>
+<tr><td class="lft col-who">HILL</td><td class="lft col-who">TYREEK</td><td class="col-who">30219944</td><td class="col-who">0</td><td class="col-who">th3312</td><td>1000481202</td><td>COLUM</td><td class="col-account">53300</td><td class="lft col-account">Officer of Administration</td><td>5201234</td><td class="lft">ENG Training Initiative</td><td>UR012345</td><td class="lft">ENG Training</td><td>01</td><td>29214</td><td class="lft">ENG High School Programs</td><td>52000167</td><td class="lft">ENG Staff General</td><td></td><td class="lft"></td><td>01</td><td>210</td><td class="lft">EXTERNAL AFFAIRS &amp; FUNDRAISING</td><td>7,211.54</td><td>2,019.23</td><td class="col-salary">7,211.54</td><td class="col-fringe">2,019.23</td><td class="col-salary">0.00</td><td class="col-fringe">0.00</td><td>09/01/2025</td><td>08/31/2026</td><td class="col-salary">7,211.54</td><td class="col-fringe">2,019.23</td><td class="col-ytd">50,480.78</td><td class="col-ytd">14,134.62</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">50,480.78</td><td class="col-ytd">14,134.62</td><td>07/01/2016</td><td>06/30/2099</td><td>0.00</td><td class="col-salary">0.00</td><td class="col-salary">0.00</td><td class="col-salary">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td></tr>
+<tr><td class="lft col-who">KELCE</td><td class="lft col-who">TRAVIS</td><td class="col-who">30334410</td><td class="col-who">0</td><td class="col-who">tk8801</td><td>1000481203</td><td>COLUM</td><td class="col-account">53300</td><td class="lft col-account">Officer of Administration</td><td>5201234</td><td class="lft">ENG Training Initiative</td><td>UR012345</td><td class="lft">ENG Training</td><td>01</td><td>29214</td><td class="lft">ENG High School Programs</td><td>52000167</td><td class="lft">ENG Staff General</td><td></td><td class="lft"></td><td>01</td><td>210</td><td class="lft">EXTERNAL AFFAIRS &amp; FUNDRAISING</td><td>8,653.85</td><td>2,423.08</td><td class="col-salary">8,653.85</td><td class="col-fringe">2,423.08</td><td class="col-salary">0.00</td><td class="col-fringe">0.00</td><td>09/01/2025</td><td>08/31/2026</td><td class="col-salary">8,653.85</td><td class="col-fringe">2,423.08</td><td class="col-ytd">60,576.95</td><td class="col-ytd">16,961.56</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">60,576.95</td><td class="col-ytd">16,961.56</td><td>07/01/2016</td><td>06/30/2099</td><td>0.00</td><td class="col-salary">0.00</td><td class="col-salary">0.00</td><td class="col-salary">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td></tr>
+<tr><td class="lft col-who">HENRY</td><td class="lft col-who">DERRICK</td><td class="col-who">30441288</td><td class="col-who">0</td><td class="col-who">dh5521</td><td>1000481204</td><td>COLUM</td><td class="col-account">54410</td><td class="lft col-account">Students-Casual (FT)</td><td>5201234</td><td class="lft">ENG Training Initiative</td><td>UR012345</td><td class="lft">ENG Training</td><td>02</td><td>29214</td><td class="lft">ENG High School Programs</td><td>52000167</td><td class="lft">ENG Staff General</td><td></td><td class="lft"></td><td>01</td><td>210</td><td class="lft">EXTERNAL AFFAIRS &amp; FUNDRAISING</td><td>6,538.46</td><td>1,830.77</td><td class="col-salary">6,538.46</td><td class="col-fringe">1,830.77</td><td class="col-salary">0.00</td><td class="col-fringe">0.00</td><td>09/01/2025</td><td>08/31/2026</td><td class="col-salary">6,538.46</td><td class="col-fringe">1,830.77</td><td class="col-ytd">45,769.22</td><td class="col-ytd">12,815.38</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">45,769.22</td><td class="col-ytd">12,815.38</td><td>07/01/2016</td><td>06/30/2099</td><td>0.00</td><td class="col-salary">0.00</td><td class="col-salary">0.00</td><td class="col-salary">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td></tr>
+<tr><td class="lft col-who">JEFFERSON</td><td class="lft col-who">JUSTIN</td><td class="col-who">30512744</td><td class="col-who">0</td><td class="col-who">jj7714</td><td>1000481205</td><td>COLUM</td><td class="col-account">53300</td><td class="lft col-account">Officer of Administration</td><td>5201234</td><td class="lft">ENG Training Initiative</td><td>UR012345</td><td class="lft">ENG Training</td><td>01</td><td>29214</td><td class="lft">ENG High School Programs</td><td>52000167</td><td class="lft">ENG Staff General</td><td></td><td class="lft"></td><td>01</td><td>210</td><td class="lft">EXTERNAL AFFAIRS &amp; FUNDRAISING</td><td>7,884.62</td><td>2,207.69</td><td class="col-salary">7,884.62</td><td class="col-fringe">2,207.69</td><td class="col-salary">0.00</td><td class="col-fringe">0.00</td><td>09/01/2025</td><td>08/31/2026</td><td class="col-salary">7,884.62</td><td class="col-fringe">2,207.69</td><td class="col-ytd">55,192.34</td><td class="col-ytd">15,453.85</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">55,192.34</td><td class="col-ytd">15,453.85</td><td>07/01/2016</td><td>06/30/2099</td><td>0.00</td><td class="col-salary">0.00</td><td class="col-salary">0.00</td><td class="col-salary">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td></tr>
+<tr><td class="lft col-who">MCCAFFREY</td><td class="lft col-who">CHRISTIAN</td><td class="col-who">30628810</td><td class="col-who">0</td><td class="col-who">cm4402</td><td>1000481206</td><td>COLUM</td><td class="col-account">59010</td><td class="lft col-account">Fringe Benefit Charge</td><td>5201234</td><td class="lft">ENG Training Initiative</td><td>UR012345</td><td class="lft">ENG Training</td><td>02</td><td>00000</td><td class="lft">Undefined</td><td>00000000</td><td class="lft">Undefined Segment</td><td></td><td class="lft"></td><td>01</td><td>210</td><td class="lft">EXTERNAL AFFAIRS &amp; FUNDRAISING</td><td>5,192.31</td><td>1,453.85</td><td class="col-salary">5,192.31</td><td class="col-fringe">1,453.85</td><td class="col-salary">0.00</td><td class="col-fringe">0.00</td><td>09/01/2025</td><td>08/31/2026</td><td class="col-salary">5,192.31</td><td class="col-fringe">1,453.85</td><td class="col-ytd">36,346.17</td><td class="col-ytd">10,176.95</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">36,346.17</td><td class="col-ytd">10,176.95</td><td>07/01/2016</td><td>06/30/2099</td><td>0.00</td><td class="col-salary">0.00</td><td class="col-salary">0.00</td><td class="col-salary">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td></tr>
+<tr><td class="lft col-who">STROUD</td><td class="lft col-who">CJ</td><td class="col-who">30711235</td><td class="col-who">0</td><td class="col-who">cs9901</td><td>1000481207</td><td>COLUM</td><td class="col-account">52810</td><td class="lft col-account">GRA Tuition</td><td>5201234</td><td class="lft">ENG Training Initiative</td><td>UR012345</td><td class="lft">ENG Training</td><td>01</td><td>29214</td><td class="lft">ENG High School Programs</td><td>52000167</td><td class="lft">ENG Staff General</td><td></td><td class="lft"></td><td>01</td><td>210</td><td class="lft">EXTERNAL AFFAIRS &amp; FUNDRAISING</td><td>3,846.15</td><td>1,076.92</td><td class="col-salary">3,846.15</td><td class="col-fringe">1,076.92</td><td class="col-salary">0.00</td><td class="col-fringe">0.00</td><td>09/01/2025</td><td>08/31/2026</td><td class="col-salary">3,846.15</td><td class="col-fringe">1,076.92</td><td class="col-ytd">26,923.05</td><td class="col-ytd">7,538.44</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">26,923.05</td><td class="col-ytd">7,538.44</td><td>07/01/2016</td><td>06/30/2099</td><td>0.00</td><td class="col-salary">0.00</td><td class="col-salary">0.00</td><td class="col-salary">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td></tr>
+<tr><td class="lft col-who">CHASE</td><td class="lft col-who">JAMARR</td><td class="col-who">30822917</td><td class="col-who">0</td><td class="col-who">jc6618</td><td>1000481208</td><td>COLUM</td><td class="col-account">53300</td><td class="lft col-account">Officer of Administration</td><td>5201234</td><td class="lft">ENG Training Initiative</td><td>UR012345</td><td class="lft">ENG Training</td><td>01</td><td>29214</td><td class="lft">ENG High School Programs</td><td>52000167</td><td class="lft">ENG Staff General</td><td></td><td class="lft"></td><td>01</td><td>210</td><td class="lft">EXTERNAL AFFAIRS &amp; FUNDRAISING</td><td>9,134.62</td><td>2,557.69</td><td class="col-salary">9,134.62</td><td class="col-fringe">2,557.69</td><td class="col-salary">0.00</td><td class="col-fringe">0.00</td><td>09/01/2025</td><td>08/31/2026</td><td class="col-salary">9,134.62</td><td class="col-fringe">2,557.69</td><td class="col-ytd">63,942.34</td><td class="col-ytd">17,903.83</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">63,942.34</td><td class="col-ytd">17,903.83</td><td>07/01/2016</td><td>06/30/2099</td><td>0.00</td><td class="col-salary">0.00</td><td class="col-salary">0.00</td><td class="col-salary">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td></tr>
+<tr><td class="lft col-who">JAMES</td><td class="lft col-who">LEBRON</td><td class="col-who">30934122</td><td class="col-who">0</td><td class="col-who">lj2323</td><td>1000481209</td><td>COLUM</td><td class="col-account">53300</td><td class="lft col-account">Officer of Administration</td><td>5201234</td><td class="lft">ENG Training Initiative</td><td>UR012345</td><td class="lft">ENG Training</td><td>01</td><td>00000</td><td class="lft">Undefined</td><td>00000000</td><td class="lft">Undefined Segment</td><td></td><td class="lft"></td><td>01</td><td>210</td><td class="lft">EXTERNAL AFFAIRS &amp; FUNDRAISING</td><td>6,250.00</td><td>1,750.00</td><td class="col-salary">6,250.00</td><td class="col-fringe">1,750.00</td><td class="col-salary">0.00</td><td class="col-fringe">0.00</td><td>09/01/2025</td><td>08/31/2026</td><td class="col-salary">6,250.00</td><td class="col-fringe">1,750.00</td><td class="col-ytd">43,750.00</td><td class="col-ytd">12,250.00</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">43,750.00</td><td class="col-ytd">12,250.00</td><td>07/01/2016</td><td>06/30/2099</td><td>0.00</td><td class="col-salary">0.00</td><td class="col-salary">0.00</td><td class="col-salary">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td></tr>
+<tr><td class="lft col-who">CURRY</td><td class="lft col-who">STEPHEN</td><td class="col-who">31044800</td><td class="col-who">0</td><td class="col-who">sc7723</td><td>1000481210</td><td>COLUM</td><td class="col-account">53300</td><td class="lft col-account">Officer of Administration</td><td>5201234</td><td class="lft">ENG Training Initiative</td><td>UR012345</td><td class="lft">ENG Training</td><td>02</td><td>29214</td><td class="lft">ENG High School Programs</td><td>52000167</td><td class="lft">ENG Staff General</td><td></td><td class="lft"></td><td>01</td><td>210</td><td class="lft">EXTERNAL AFFAIRS &amp; FUNDRAISING</td><td>4,711.54</td><td>1,319.23</td><td class="col-salary">4,711.54</td><td class="col-fringe">1,319.23</td><td class="col-salary">0.00</td><td class="col-fringe">0.00</td><td>09/01/2025</td><td>08/31/2026</td><td class="col-salary">4,711.54</td><td class="col-fringe">1,319.23</td><td class="col-ytd">32,980.78</td><td class="col-ytd">9,234.61</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">32,980.78</td><td class="col-ytd">9,234.61</td><td>07/01/2016</td><td>06/30/2099</td><td>0.00</td><td class="col-salary">0.00</td><td class="col-salary">0.00</td><td class="col-salary">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td></tr>
+<tr><td class="lft col-who">HURTS</td><td class="lft col-who">JALEN</td><td class="col-who">31155930</td><td class="col-who">0</td><td class="col-who">jh4480</td><td>1000481211</td><td>COLUM</td><td class="col-account">53300</td><td class="lft col-account">Officer of Administration</td><td>5201234</td><td class="lft">ENG Training Initiative</td><td>UR012345</td><td class="lft">ENG Training</td><td>01</td><td>29214</td><td class="lft">ENG High School Programs</td><td>52000167</td><td class="lft">ENG Staff General</td><td></td><td class="lft"></td><td>01</td><td>210</td><td class="lft">EXTERNAL AFFAIRS &amp; FUNDRAISING</td><td>10,576.92</td><td>2,961.54</td><td class="col-salary">10,576.92</td><td class="col-fringe">2,961.54</td><td class="col-salary">0.00</td><td class="col-fringe">0.00</td><td>09/01/2025</td><td>08/31/2026</td><td class="col-salary">10,576.92</td><td class="col-fringe">2,961.54</td><td class="col-ytd">74,038.44</td><td class="col-ytd">20,730.78</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">74,038.44</td><td class="col-ytd">20,730.78</td><td>07/01/2016</td><td>06/30/2099</td><td>0.00</td><td class="col-salary">0.00</td><td class="col-salary">0.00</td><td class="col-salary">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td></tr>
+<tr><td class="lft col-who">DURANT</td><td class="lft col-who">KEVIN</td><td class="col-who">31268841</td><td class="col-who">0</td><td class="col-who">kd5577</td><td>1000481212</td><td>COLUM</td><td class="col-account">52810</td><td class="lft col-account">GRA Tuition</td><td>5201234</td><td class="lft">ENG Training Initiative</td><td>UR012345</td><td class="lft">ENG Training</td><td>02</td><td>00000</td><td class="lft">Undefined</td><td>00000000</td><td class="lft">Undefined Segment</td><td></td><td class="lft"></td><td>01</td><td>210</td><td class="lft">EXTERNAL AFFAIRS &amp; FUNDRAISING</td><td>5,769.23</td><td>1,615.38</td><td class="col-salary">5,769.23</td><td class="col-fringe">1,615.38</td><td class="col-salary">0.00</td><td class="col-fringe">0.00</td><td>09/01/2025</td><td>08/31/2026</td><td class="col-salary">5,769.23</td><td class="col-fringe">1,615.38</td><td class="col-ytd">40,384.61</td><td class="col-ytd">11,307.66</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">40,384.61</td><td class="col-ytd">11,307.66</td><td>07/01/2016</td><td>06/30/2099</td><td>0.00</td><td class="col-salary">0.00</td><td class="col-salary">0.00</td><td class="col-salary">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td></tr>
+<tr><td class="lft col-who">ALLEN</td><td class="lft col-who">JOSH</td><td class="col-who">31381002</td><td class="col-who">0</td><td class="col-who">ja9934</td><td>1000481213</td><td>COLUM</td><td class="col-account">53300</td><td class="lft col-account">Officer of Administration</td><td>5201234</td><td class="lft">ENG Training Initiative</td><td>UR012345</td><td class="lft">ENG Training</td><td>01</td><td>29214</td><td class="lft">ENG High School Programs</td><td>52000167</td><td class="lft">ENG Staff General</td><td></td><td class="lft"></td><td>01</td><td>210</td><td class="lft">EXTERNAL AFFAIRS &amp; FUNDRAISING</td><td>11,057.69</td><td>3,096.15</td><td class="col-salary">11,057.69</td><td class="col-fringe">3,096.15</td><td class="col-salary">0.00</td><td class="col-fringe">0.00</td><td>09/01/2025</td><td>08/31/2026</td><td class="col-salary">11,057.69</td><td class="col-fringe">3,096.15</td><td class="col-ytd">77,403.83</td><td class="col-ytd">21,673.05</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">77,403.83</td><td class="col-ytd">21,673.05</td><td>07/01/2016</td><td>06/30/2099</td><td>0.00</td><td class="col-salary">0.00</td><td class="col-salary">0.00</td><td class="col-salary">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td></tr>
+<tr><td class="lft col-who">ANTETOKOUNMPO</td><td class="lft col-who">GIANNIS</td><td class="col-who">31492114</td><td class="col-who">0</td><td class="col-who">ga1122</td><td>1000481214</td><td>COLUM</td><td class="col-account">59010</td><td class="lft col-account">Fringe Benefit Charge</td><td>5201234</td><td class="lft">ENG Training Initiative</td><td>UR012345</td><td class="lft">ENG Training</td><td>01</td><td>00000</td><td class="lft">Undefined</td><td>00000000</td><td class="lft">Undefined Segment</td><td></td><td class="lft"></td><td>01</td><td>210</td><td class="lft">EXTERNAL AFFAIRS &amp; FUNDRAISING</td><td>2,884.62</td><td>807.69</td><td class="col-salary">2,884.62</td><td class="col-fringe">807.69</td><td class="col-salary">0.00</td><td class="col-fringe">0.00</td><td>09/01/2025</td><td>08/31/2026</td><td class="col-salary">2,884.62</td><td class="col-fringe">807.69</td><td class="col-ytd">20,192.34</td><td class="col-ytd">5,653.83</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">20,192.34</td><td class="col-ytd">5,653.83</td><td>07/01/2016</td><td>06/30/2099</td><td>0.00</td><td class="col-salary">0.00</td><td class="col-salary">0.00</td><td class="col-salary">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td></tr>
+<tr><td class="lft col-who">BOSA</td><td class="lft col-who">NICK</td><td class="col-who">31600337</td><td class="col-who">0</td><td class="col-who">nb8841</td><td>1000481215</td><td>COLUM</td><td class="col-account">53300</td><td class="lft col-account">Officer of Administration</td><td>5201234</td><td class="lft">ENG Training Initiative</td><td>UR012345</td><td class="lft">ENG Training</td><td>02</td><td>29214</td><td class="lft">ENG High School Programs</td><td>52000167</td><td class="lft">ENG Staff General</td><td></td><td class="lft"></td><td>01</td><td>210</td><td class="lft">EXTERNAL AFFAIRS &amp; FUNDRAISING</td><td>8,076.92</td><td>2,261.54</td><td class="col-salary">8,076.92</td><td class="col-fringe">2,261.54</td><td class="col-salary">0.00</td><td class="col-fringe">0.00</td><td>09/01/2025</td><td>08/31/2026</td><td class="col-salary">8,076.92</td><td class="col-fringe">2,261.54</td><td class="col-ytd">56,538.44</td><td class="col-ytd">15,830.78</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">56,538.44</td><td class="col-ytd">15,830.78</td><td>07/01/2016</td><td>06/30/2099</td><td>0.00</td><td class="col-salary">0.00</td><td class="col-salary">0.00</td><td class="col-salary">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td></tr>
+<tr><td class="lft col-who">DONCIC</td><td class="lft col-who">LUKA</td><td class="col-who">31712488</td><td class="col-who">0</td><td class="col-who">ld3390</td><td>1000481216</td><td>COLUM</td><td class="col-account">53300</td><td class="lft col-account">Officer of Administration</td><td>5201234</td><td class="lft">ENG Training Initiative</td><td>UR012345</td><td class="lft">ENG Training</td><td>01</td><td>29214</td><td class="lft">ENG High School Programs</td><td>52000167</td><td class="lft">ENG Staff General</td><td></td><td class="lft"></td><td>01</td><td>210</td><td class="lft">EXTERNAL AFFAIRS &amp; FUNDRAISING</td><td>6,923.08</td><td>1,938.46</td><td class="col-salary">6,923.08</td><td class="col-fringe">1,938.46</td><td class="col-salary">0.00</td><td class="col-fringe">0.00</td><td>09/01/2025</td><td>08/31/2026</td><td class="col-salary">6,923.08</td><td class="col-fringe">1,938.46</td><td class="col-ytd">48,461.56</td><td class="col-ytd">13,569.22</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">48,461.56</td><td class="col-ytd">13,569.22</td><td>07/01/2016</td><td>06/30/2099</td><td>0.00</td><td class="col-salary">0.00</td><td class="col-salary">0.00</td><td class="col-salary">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td></tr>
+<tr><td class="lft col-who">WATT</td><td class="lft col-who">TJ</td><td class="col-who">31824600</td><td class="col-who">0</td><td class="col-who">tw1122</td><td>1000481217</td><td>COLUM</td><td class="col-account">52810</td><td class="lft col-account">GRA Tuition</td><td>5201234</td><td class="lft">ENG Training Initiative</td><td>UR012345</td><td class="lft">ENG Training</td><td>01</td><td>00000</td><td class="lft">Undefined</td><td>00000000</td><td class="lft">Undefined Segment</td><td></td><td class="lft"></td><td>01</td><td>210</td><td class="lft">EXTERNAL AFFAIRS &amp; FUNDRAISING</td><td>7,500.00</td><td>2,100.00</td><td class="col-salary">7,500.00</td><td class="col-fringe">2,100.00</td><td class="col-salary">0.00</td><td class="col-fringe">0.00</td><td>09/01/2025</td><td>08/31/2026</td><td class="col-salary">7,500.00</td><td class="col-fringe">2,100.00</td><td class="col-ytd">52,500.00</td><td class="col-ytd">14,700.00</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">52,500.00</td><td class="col-ytd">14,700.00</td><td>07/01/2016</td><td>06/30/2099</td><td>0.00</td><td class="col-salary">0.00</td><td class="col-salary">0.00</td><td class="col-salary">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td></tr>
+<tr><td class="lft col-who">STAFFORD</td><td class="lft col-who">MATTHEW</td><td class="col-who">31937720</td><td class="col-who">0</td><td class="col-who">ms6601</td><td>1000481218</td><td>COLUM</td><td class="col-account">53300</td><td class="lft col-account">Officer of Administration</td><td>5201234</td><td class="lft">ENG Training Initiative</td><td>UR012345</td><td class="lft">ENG Training</td><td>02</td><td>29214</td><td class="lft">ENG High School Programs</td><td>52000167</td><td class="lft">ENG Staff General</td><td></td><td class="lft"></td><td>01</td><td>210</td><td class="lft">EXTERNAL AFFAIRS &amp; FUNDRAISING</td><td>4,326.92</td><td>1,211.54</td><td class="col-salary">4,326.92</td><td class="col-fringe">1,211.54</td><td class="col-salary">0.00</td><td class="col-fringe">0.00</td><td>09/01/2025</td><td>08/31/2026</td><td class="col-salary">4,326.92</td><td class="col-fringe">1,211.54</td><td class="col-ytd">30,288.44</td><td class="col-ytd">8,480.78</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">30,288.44</td><td class="col-ytd">8,480.78</td><td>07/01/2016</td><td>06/30/2099</td><td>0.00</td><td class="col-salary">0.00</td><td class="col-salary">0.00</td><td class="col-salary">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td></tr>
+<tr><td class="lft col-who">TATUM</td><td class="lft col-who">JAYSON</td><td class="col-who">32048810</td><td class="col-who">0</td><td class="col-who">jt8834</td><td>1000481219</td><td>COLUM</td><td class="col-account">53300</td><td class="lft col-account">Officer of Administration</td><td>5201234</td><td class="lft">ENG Training Initiative</td><td>UR012345</td><td class="lft">ENG Training</td><td>01</td><td>29214</td><td class="lft">ENG High School Programs</td><td>52000167</td><td class="lft">ENG Staff General</td><td></td><td class="lft"></td><td>01</td><td>210</td><td class="lft">EXTERNAL AFFAIRS &amp; FUNDRAISING</td><td>8,461.54</td><td>2,369.23</td><td class="col-salary">8,461.54</td><td class="col-fringe">2,369.23</td><td class="col-salary">0.00</td><td class="col-fringe">0.00</td><td>09/01/2025</td><td>08/31/2026</td><td class="col-salary">8,461.54</td><td class="col-fringe">2,369.23</td><td class="col-ytd">59,230.78</td><td class="col-ytd">16,584.61</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">59,230.78</td><td class="col-ytd">16,584.61</td><td>07/01/2016</td><td>06/30/2099</td><td>0.00</td><td class="col-salary">0.00</td><td class="col-salary">0.00</td><td class="col-salary">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td></tr>
+<tr><td class="lft col-who">EKELER</td><td class="lft col-who">AUSTIN</td><td class="col-who">32162905</td><td class="col-who">0</td><td class="col-who">ae5561</td><td>1000481220</td><td>COLUM</td><td class="col-account">59010</td><td class="lft col-account">Fringe Benefit Charge</td><td>5201234</td><td class="lft">ENG Training Initiative</td><td>UR012345</td><td class="lft">ENG Training</td><td>02</td><td>00000</td><td class="lft">Undefined</td><td>00000000</td><td class="lft">Undefined Segment</td><td></td><td class="lft"></td><td>01</td><td>210</td><td class="lft">EXTERNAL AFFAIRS &amp; FUNDRAISING</td><td>5,576.92</td><td>1,561.54</td><td class="col-salary">5,576.92</td><td class="col-fringe">1,561.54</td><td class="col-salary">0.00</td><td class="col-fringe">0.00</td><td>09/01/2025</td><td>08/31/2026</td><td class="col-salary">5,576.92</td><td class="col-fringe">1,561.54</td><td class="col-ytd">39,038.44</td><td class="col-ytd">10,930.78</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">39,038.44</td><td class="col-ytd">10,930.78</td><td>07/01/2016</td><td>06/30/2099</td><td>0.00</td><td class="col-salary">0.00</td><td class="col-salary">0.00</td><td class="col-salary">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td></tr>
+      <tr class="total-row">
+        <td class="lft" colspan="23">Total</td>
+        <td>140,221.55</td><td>39,316.02</td>
+        <td class="col-salary">140,221.55</td><td class="col-fringe">39,316.02</td>
+        <td class="col-salary">0.00</td><td class="col-fringe">0.00</td>
+        <td></td><td></td>
+        <td class="col-salary">140,221.55</td><td class="col-fringe">39,316.02</td>
+        <td class="col-ytd">981,550.85</td><td class="col-ytd">274,814.31</td>
+        <td class="col-ytd">0.00</td><td class="col-ytd">0.00</td>
+        <td class="col-ytd">981,550.85</td><td class="col-ytd">274,814.31</td>
+        <td></td><td></td>
+        <td>0.00</td>
+        <td class="col-salary">0.00</td><td class="col-salary">0.00</td><td class="col-salary">0.00</td>
+        <td class="col-ytd">0.00</td><td class="col-ytd">0.00</td><td class="col-ytd">0.00</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="footnotes">* 1 of 1 &nbsp;&nbsp; Transactions 1 thru 20</div>
+  </div>
+</div><!-- /report-panel -->
+
+<div id="explain-panel">
+  <div class="panel-header">
+    <span>📘 Field Guide <span class="panel-tab-hint">click again to close</span></span>
+    <button id="panel-close" title="Close (Esc)">✕</button>
+  </div>
+  <div id="explain-inner">
+    <div id="explain-content">
+      <p style="color:#555;font-size:10px;line-height:1.55;">Click any <strong style="color:#003087;">column header</strong> to learn what it means.</p>
+    </div>
+  </div>
+</div>
+
+<div class="training-badge">🎓 Training Mode</div>
+
+<script>
+// ── PILL CONFIG ──
+var PILL_CFG = {
+  who: {
+    colClass:'col-who',
+    text:'#0a5c6e', line:'rgba(14,116,144,.38)', strong:'rgba(14,116,144,.72)',
+    soft:'rgba(14,116,144,.18)', fill:'rgba(14,116,144,.04)', cell:'rgba(14,116,144,.025)',
+    rCenter:'rgba(14,116,144,.04)', rMid:'rgba(14,116,144,.015)', edge:'rgba(14,116,144,.55)'
+  },
+  account: {
+    colClass:'col-account',
+    text:'#001a57', line:'rgba(0,48,135,.38)', strong:'rgba(0,48,135,.72)',
+    soft:'rgba(0,48,135,.18)', fill:'rgba(0,48,135,.04)', cell:'rgba(0,48,135,.025)',
+    rCenter:'rgba(0,48,135,.04)', rMid:'rgba(0,48,135,.015)', edge:'rgba(0,48,135,.55)'
+  },
+  salary: {
+    colClass:'col-salary',
+    text:'#6b3800', line:'rgba(180,100,0,.38)', strong:'rgba(180,100,0,.72)',
+    soft:'rgba(180,100,0,.18)', fill:'rgba(196,167,71,.05)', cell:'rgba(196,167,71,.03)',
+    rCenter:'rgba(196,167,71,.05)', rMid:'rgba(196,167,71,.015)', edge:'rgba(180,100,0,.55)'
+  },
+  fringe: {
+    colClass:'col-fringe',
+    text:'#5b21b6', line:'rgba(124,58,237,.38)', strong:'rgba(124,58,237,.72)',
+    soft:'rgba(124,58,237,.18)', fill:'rgba(124,58,237,.04)', cell:'rgba(124,58,237,.025)',
+    rCenter:'rgba(124,58,237,.04)', rMid:'rgba(124,58,237,.015)', edge:'rgba(124,58,237,.55)'
+  },
+  ytd: {
+    colClass:'col-ytd',
+    text:'#1a5c1a', line:'rgba(42,140,92,.38)', strong:'rgba(42,140,92,.72)',
+    soft:'rgba(42,140,92,.18)', fill:'rgba(42,140,92,.04)', cell:'rgba(42,140,92,.025)',
+    rCenter:'rgba(42,140,92,.04)', rMid:'rgba(42,140,92,.015)', edge:'rgba(42,140,92,.55)'
+  }
+};
+
+var activePill = null;
+var glowStrips = [];
+var walkthroughIndex = -1;
+
+function applyVars(el, cfg) {
+  el.style.setProperty('--hl-text',   cfg.text);
+  el.style.setProperty('--hl-line',   cfg.line);
+  el.style.setProperty('--hl-strong', cfg.strong);
+  el.style.setProperty('--hl-soft',   cfg.soft);
+  el.style.setProperty('--hl-fill',   cfg.fill);
+  el.style.setProperty('--hl-cell',   cfg.cell);
+  el.style.setProperty('--hl-edge',   cfg.edge);
+}
+
+function clearHighlights() {
+  document.querySelectorAll('.hl-hdr').forEach(function(el){ el.classList.remove('hl-hdr'); el.style.cssText=''; });
+  document.querySelectorAll('.hl-cell').forEach(function(el){ el.classList.remove('hl-cell'); el.style.cssText=''; });
+  glowStrips.forEach(function(s){ s.parentNode && s.parentNode.removeChild(s); });
+  glowStrips = [];
+}
+
+function positionGlowStrips(colClass, cfg) {
+  var wrapper = document.getElementById('table-wrapper');
+  var table   = document.getElementById('main-table');
+  if (!wrapper || !table) return;
+  if (wrapper.offsetWidth === 0) { setTimeout(function(){ positionGlowStrips(colClass, cfg); }, 80); return; }
+  document.querySelectorAll('th.' + colClass).forEach(function(th) {
+    var left = th.offsetLeft + table.offsetLeft;
+    var strip = document.createElement('div');
+    strip.className = 'hl-glow-strip';
+    strip.style.setProperty('--hl-radial-center', cfg.rCenter);
+    strip.style.setProperty('--hl-radial-mid',    cfg.rMid);
+    strip.style.setProperty('--hl-edge',          cfg.edge);
+    strip.style.left   = left + 'px';
+    strip.style.width  = th.offsetWidth + 'px';
+    strip.style.height = wrapper.scrollHeight + 'px';
+    strip.style.top    = '0';
+    wrapper.appendChild(strip);
+    glowStrips.push(strip);
+  });
+}
+
+function applyHighlight(pill) {
+  var cfg = PILL_CFG[pill]; if (!cfg) return;
+  document.querySelectorAll('th.' + cfg.colClass).forEach(function(th){ th.classList.add('hl-hdr'); applyVars(th, cfg); });
+  document.querySelectorAll('td.' + cfg.colClass).forEach(function(td){ td.classList.add('hl-cell'); applyVars(td, cfg); });
+  // Scroll to first highlighted column
+  var firstTh = document.querySelector('th.' + cfg.colClass);
+  if (firstTh) {
+    var sa = document.getElementById('table-scroll-area');
+    var thR = firstTh.getBoundingClientRect(), saR = sa.getBoundingClientRect();
+    if (thR.left < saR.left + 40 || thR.right > saR.right - 40) {
+      sa.scrollTo({ left: sa.scrollLeft + (thR.left - saR.left) - 60, behavior: 'smooth' });
+    }
+  }
+  setTimeout(function(){ positionGlowStrips(cfg.colClass, cfg); }, 60);
+}
+
+function togglePill(el) {
+  var p = el.getAttribute('data-pill');
+  if (activePill === p) { el.classList.remove('pill-on'); clearHighlights(); activePill = null; return; }
+  if (activePill) { var prev = document.querySelector('.pill[data-pill="' + activePill + '"]'); if (prev) prev.classList.remove('pill-on'); clearHighlights(); }
+  // close walkthrough/overview when a highlight pill is picked
+  var wt = document.querySelector('.pill[data-pill="walkthrough"]'); if (wt) wt.classList.remove('pill-on');
+  closeOverviewPanel();
+  el.classList.add('pill-on'); activePill = p; applyHighlight(p);
+}
+
+// Reposition on scroll
+var sa = document.getElementById('table-scroll-area');
+if (sa) sa.addEventListener('scroll', function(){
+  if (activePill) { glowStrips.forEach(function(s){ s.parentNode && s.parentNode.removeChild(s); }); glowStrips=[]; positionGlowStrips(PILL_CFG[activePill].colClass, PILL_CFG[activePill]); }
+});
+
+// ── ARROW KEY CONTROLS ──
+var PILL_ORDER = ['overview','walkthrough','who','account','salary','fringe','ytd'];
+var pillBarVisible = false;
+
+function showPillBar() {
+  document.getElementById('pill-bar').style.display = 'flex';
+  pillBarVisible = true;
+}
+function hidePillBar() {
+  document.getElementById('pill-bar').style.display = 'none';
+  pillBarVisible = false;
+  if (activePill) { var prev = document.querySelector('.pill[data-pill="' + activePill + '"]'); if (prev) prev.classList.remove('pill-on'); clearHighlights(); activePill = null; }
+  closeOverviewPanel();
+}
+function navigatePill(dir) {
+  if (!pillBarVisible) return;
+  var idx = activePill ? PILL_ORDER.indexOf(activePill) : -1;
+  var next = idx + dir;
+  if (next < 0) next = PILL_ORDER.length - 1;
+  if (next >= PILL_ORDER.length) next = 0;
+  var np = document.querySelector('.pill[data-pill="' + PILL_ORDER[next] + '"]');
+  if (np) togglePill(np);
+}
+
+// ── OVERVIEW ──
+function closeOverviewPanel() {
+  document.getElementById('overview-panel').classList.remove('open');
+  var ov = document.querySelector('.pill[data-pill="overview"]');
+  if (ov) ov.classList.remove('pill-on');
+}
+function toggleOverviewPill(el) {
+  var panel = document.getElementById('overview-panel');
+  var isOpen = panel.classList.contains('open');
+  if (isOpen) { panel.classList.remove('open'); el.classList.remove('pill-on'); }
+  else { panel.classList.add('open'); el.classList.add('pill-on'); }
+}
+
+// ── WALKTHROUGH ──
+var WALKTHROUGH_STEPS = [
+  { key:'emp_last_name', pill:'who',    title:'Step 1 — Who was paid',         body:'Start with Employee Last Name, First Name, EmplID, and UNI. These fields confirm exactly whose payroll activity you are reviewing. Use EmplID as the most reliable identifier when searching for a specific person.' },
+  { key:'combo_code',    pill:null,     title:'Step 2 — Combo Code',           body:'The Combo Code represents the complete ChartString behind the payroll charge. Think of it as the shortcut that connects the employee payroll line to the full set of financial fields. Every combination of fund, department, project, account, and other chartfields is encoded here.' },
+  { key:'account',       pill:'account',title:'Step 3 — Account',              body:'Account tells you what type of payroll was charged — salary, fringe, or GRA. This is one of the most important fields for understanding whether the line is a regular salary charge, a fringe benefit allocation, or graduate student support.' },
+  { key:'ptd_salary',    pill:'salary', title:'Step 4 — Period to Date Salary','body':'Period to Date Salary shows what posted in the current accounting period only. Use this for monthly reconciliation. Compare it to expected pay to confirm the amount looks right before moving on to fiscal year totals.' },
+  { key:'ftd_salary',    pill:'salary', title:'Step 5 — FTD Salary',           body:'FTD Salary is the fiscal year-to-date salary total from July 1 through the current period. This is the key field for tracking total salary spend within the current fiscal year.' },
+  { key:'ftd_fringe',    pill:'fringe', title:'Step 6 — FTD Fringe',           body:'FTD Fringe shows the fiscal year-to-date fringe benefit burden. Always review fringe alongside salary — together they reflect the true cost of employment charged to the project.' },
+  { key:'ftd_encum_salary', pill:null,  title:'Step 7 — Encumbrances',         body:'FTD Encum Salary and FTD Encum Fringe show what is still expected to be charged through June 30. Check the Encumbrance Start and End Dates to confirm the commitment period aligns with the actual appointment. A mismatch here often means a salary distribution needs to be updated.' },
+  { key:'ptd2_salary',   pill:'ytd',   title:'Step 8 — PTD Totals',           body:'PTD Salary and PTD Fringe reflect cumulative Project to Date activity — the total since the project began. Use these fields to assess the full lifetime payroll picture, especially for multi-year projects or sponsored awards.' },
+  { key:'ptd_cum_salary',pill:'ytd',   title:'Step 9 — PTD Cumulative',       body:'PTD-Cumulative Salary and PTD-Cumulative Fringe show how payroll has built up over time across the project. These are the most complete totals on the report and are critical for project closeout review.' },
+  { key:'proj_act_start',pill:null,    title:'Step 10 — Activity Dates',      body:'Proj Act Start Date and Proj Act End Date define the valid charging window for the project activity. Confirm that payroll charges and encumbrances fall within this period. Activity outside these dates should be investigated.' },
+  { key:'ptd_gra',       pill:null,    title:'Step 11 — GRA Columns',         body:'The GRA columns — Period to Date GRA, FTD GRA, FTD Encum GRA, FTD-Cumulative GRA, and PTD equivalents — track graduate research assistant payroll separately. Review these whenever student support on grants needs to be confirmed or reconciled.' }
+];
+var walkthroughIndex = -1;
+
+function renderWalkthroughControls(index) {
+  return '<div class="walkthrough-controls">' +
+    (index > 0 ? '<button type="button" class="walkthrough-mini" data-wt-nav="prev">◀ Back</button>' : '') +
+    (index < WALKTHROUGH_STEPS.length - 1 ? '<button type="button" class="walkthrough-mini" data-wt-nav="next">Next ▶</button>' : '<button type="button" class="walkthrough-mini" data-wt-nav="done">Finish</button>') +
+    '</div>';
+}
+
+function setActivePillByName(name) {
+  if (!name) {
+    if (activePill) { var prev = document.querySelector('.pill[data-pill="' + activePill + '"]'); if (prev) prev.classList.remove('pill-on'); clearHighlights(); activePill = null; }
+    return;
+  }
+  if (!pillBarVisible) showPillBar();
+  var btn = document.querySelector('.pill[data-pill="' + name + '"]');
+  if (btn && activePill !== name) togglePill(btn);
+}
+
+function openWalkthroughStep(index) {
+  if (index < 0 || index >= WALKTHROUGH_STEPS.length) return;
+  walkthroughIndex = index;
+  var step = WALKTHROUGH_STEPS[index];
+  if (step.pill) { setActivePillByName(step.pill); }
+  else if (activePill) { setActivePillByName(null); }
+  var el = document.querySelector('.psr thead th[data-key="' + step.key + '"]');
+  var data = EXPLANATIONS[step.key] || { label: step.title, related: 'Use nearby fields together for complete analysis.' };
+  if (activeHdrEl) activeHdrEl.classList.remove('active');
+  activeHdrEl = el || null; activeHdrKey = step.key;
+  if (el) el.classList.add('active');
+  document.getElementById('explain-content').innerHTML =
+    '<div class="explain-field-name">' + step.title + '</div>' +
+    '<div class="explain-section"><div class="tip-badge">GUIDED REVIEW</div><div class="explain-section-body">' + step.body + '</div></div>' +
+    '<div class="explain-section"><div class="tip-badge">FOCUS FIELD</div><div class="explain-section-body">' + data.label + '</div></div>' +
+    '<div class="explain-section"><div class="tip-badge">RELATED FIELDS</div><div class="explain-section-body">' + (data.related || 'Use nearby fields together for complete analysis.') + '</div></div>' +
+    renderWalkthroughControls(index);
+  document.getElementById('explain-panel').classList.add('open');
+  document.getElementById('explain-inner').scrollTop = 0;
+  if (el) { el.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' }); }
+}
+
+function startWalkthroughFromPill(el) {
+  var wt = document.querySelector('.pill[data-pill="walkthrough"]');
+  if (wt) wt.classList.add('pill-on');
+  closeOverviewPanel();
+  openWalkthroughStep(0);
+}
+
+document.getElementById('explain-content').addEventListener('click', function(e) {
+  var wtBtn = e.target.closest('[data-wt-nav]');
+  if (wtBtn) {
+    var dir = wtBtn.getAttribute('data-wt-nav');
+    if (dir === 'prev') openWalkthroughStep(walkthroughIndex - 1);
+    else if (dir === 'next') openWalkthroughStep(walkthroughIndex + 1);
+    else if (dir === 'done') closeFieldPanel();
+  }
+});
+
+// ── FIELD GUIDE ──
+var EXPLANATIONS = {
+  emp_last_name:    { label:'Employee Last Name',         what:"The employee's last name.",                                                                        interpret:"This is one of the primary identifiers used to recognize the employee tied to the payroll line.",                                                          why:"It helps users quickly find and validate the individual associated with the charge.",                                                               related:"Use with Employee First Name, EmplID, and UNI to confirm employee identity." },
+  emp_first_name:   { label:'Employee First Name',        what:"The employee's first name.",                                                                       interpret:"This works with the last name to identify the person tied to the payroll transaction.",                                                                  why:"It helps distinguish employees with similar last names and supports accurate review.",                                                              related:"Use with Employee Last Name, EmplID, and UNI." },
+  emplid:           { label:'EmplID',                     what:"The employee's system-assigned employee ID.",                                                       interpret:"This is the formal HR/payroll identifier for the individual.",                                                                                         why:"This is often the most reliable employee identifier for research, reconciliation, and payroll follow-up.",                                         related:"Use with UNI, Empl Rec#, and employee name fields." },
+  empl_rcd:         { label:'Empl Rec#',                  what:"The employee record number tied to the payroll charge.",                                            interpret:"An employee can have more than one employment record in the system. This field tells you which job record the payroll line came from.",               why:"It helps separate charges when one employee holds multiple roles or appointments.",                                                                 related:"Use with EmplID and employee name fields." },
+  uni:              { label:'UNI',                        what:"The employee's Columbia UNI.",                                                                      interpret:"This is the employee's institutional login identifier.",                                                                                               why:"It is a familiar identifier for departments and is often easier to recognize than EmplID.",                                                        related:"Use with EmplID, Employee Last Name, and Employee First Name." },
+  combo_code:       { label:'Combo Code',                 what:"The Combo Code is the payroll distribution code representing the full ChartString used to charge payroll.", interpret:"Think of this as the payroll system's shortcut for the complete set of ChartFields behind the transaction.",                                       why:"It shows how payroll was distributed financially and helps validate whether salary was charged to the correct funding setup.",                      related:"It ties to BU, Fund, Department, Project, Proj Activity, Initiative, Segment, Site, Function, and Account." },
+  bu:               { label:'BU',                         what:"The Business Unit where the payroll transaction is recorded.",                                       interpret:"This identifies the top-level financial environment the payroll line belongs to.",                                                                  why:"It confirms the transaction posted in the correct institutional ledger structure.",                                                                 related:"Use with Fund, Department, and Project." },
+  account:          { label:'Account',                    what:"The natural account charged by the payroll transaction.",                                            interpret:"This tells you what type of payroll-related expense is being recorded, such as salary or fringe.",                                                  why:"It is one of the core classification fields used to distinguish salary from fringe and other payroll-related charges.",                             related:"Use with Account Description and the salary, fringe, and GRA columns." },
+  account_desc:     { label:'Account Description',        what:"The readable description of the Account code.",                                                     interpret:"This explains the type of payroll charge in plain language.",                                                                                          why:"It helps users quickly understand whether the line is salary, fringe, or another payroll-related amount.",                                         related:"Paired directly with Account." },
+  department:       { label:'Department',                 what:"The department code responsible for the payroll charge.",                                            interpret:"This identifies the academic or administrative unit who owns the transaction.",                                                                      why:"It supports budget ownership, accountability, and departmental reporting.",                                                                         related:"Use with Department Description, Project, and Fund." },
+  dept_desc:        { label:'Department Description',     what:"The readable name of the department code.",                                                         interpret:"This translates the department code into the department's actual name.",                                                                             why:"It makes the report easier to review and reduces coding confusion.",                                                                                related:"Paired directly with Department." },
+  project:          { label:'Project',                    what:"The project charged by the payroll line.",                                                           interpret:"This identifies the award, project, or funding purpose receiving the payroll expense.",                                                             why:"It is essential for project-level payroll review, especially for sponsored and restricted activity.",                                               related:"Use with Project Description, Proj Activity, Fund, and Department." },
+  proj_desc:        { label:'Project Description',        what:"The readable title of the Project code.",                                                           interpret:"This explains the project in plain language.",                                                                                                         why:"It helps confirm that payroll was charged to the intended project.",                                                                                related:"Paired directly with Project." },
+  proj_activity:    { label:'Proj Activity',              what:"The specific activity tied to the project.",                                                         interpret:"Projects can have multiple activities representing different phases, funding purposes, or operational components.",                                   why:"It ensures payroll is charged to the correct project activity and supports more precise project monitoring.",                                       related:"Use with Project, Initiative, and Proj Act Start Date / Proj Act End Date." },
+  initiative:       { label:'Initiative',                 what:"Chartfield that answers the question — which specific project or award is this transaction tied to?", interpret:"This groups payroll activity under a broader institutional purpose or initiative.",                                                                    why:"It helps leadership and departments analyze payroll charges in a larger strategic context.",                                                        related:"Use with Initiative Description, Segment, and Project." },
+  initiative_desc:  { label:'Initiative Description',     what:"The readable name of the Initiative code.",                                                         interpret:"This explains the initiative in plain language.",                                                                                                      why:"It makes coded initiative values easier to understand during review.",                                                                              related:"Paired directly with Initiative." },
+  segment:          { label:'Segment',                    what:"The chartfield that answers the question, who or what is this activity specifically associated with?", interpret:"This helps break activity into a more specific internal reporting category.",                                                                          why:"It supports specialized reporting and more detailed financial analysis.",                                                                           related:"Use with Segment Description and Initiative." },
+  segment_desc:     { label:'Segment Description',        what:"The readable name of the Segment code.",                                                            interpret:"This explains the segment in plain language.",                                                                                                         why:"It helps users understand coded segment values more easily.",                                                                                      related:"Paired directly with Segment." },
+  site:             { label:'Site',                       what:"The site or location tied to the payroll transaction.",                                              interpret:"This identifies where the activity is organizationally or physically associated.",                                                                   why:"It is useful when reviewing payroll across multiple sites or operational locations.",                                                               related:"Use with Site Description, Department, and Project." },
+  site_desc:        { label:'Site Description',           what:"The readable name of the Site code.",                                                               interpret:"This translates the site code into its actual name.",                                                                                                  why:"It improves readability and reduces confusion during report review.",                                                                               related:"Paired directly with Site." },
+  fund:             { label:'Fund',                       what:"The fund code supporting the payroll charge.",                                                       interpret:"This shows the funding source behind the transaction.",                                                                                                why:"It is critical for identifying whether payroll is being charged to the correct funding bucket, especially for restricted and sponsored activity.",   related:"Use with Department, Project, and Function." },
+  function:         { label:'Function',                   what:"The functional purpose classification of the payroll expense.",                                      interpret:"This shows the type of institutional purpose the expense supports, such as research, instruction, or administration.",                              why:"It supports institutional reporting and helps classify payroll at a high level.",                                                                   related:"Use with Function Description and Fund." },
+  function_desc:    { label:'Function Description',       what:"The readable name of the Function code.",                                                           interpret:"This explains the functional purpose in plain language.",                                                                                              why:"It makes functional classifications easier to understand during review.",                                                                           related:"Paired directly with Function." },
+  ptd_salary:       { label:'Period to Date Salary',      what:"Salary expense recorded in the current accounting period.",                                          interpret:"This shows what salary posted this month or current period only.",                                                                                    why:"It is one of the most important monthly reconciliation fields.",                                                                                   related:"Compare with PTD Fringe, FTD Salary, and PTD-Cumulative Salary." },
+  ptd_fringe:       { label:'Period to Date Fringe',      what:"Fringe expense recorded in the current accounting period.",                                          interpret:"This shows fringe charges that posted this month or current period only.",                                                                           why:"It helps validate the full payroll cost for the period, not just salary.",                                                                         related:"Use with Period to Date Salary and FTD Fringe." },
+  ftd_salary:       { label:'FTD Salary',                 what:"Salary expense recorded from the start of the fiscal year through the current period.",              interpret:"This is the year-to-date salary total.",                                                                                                               why:"It helps users evaluate cumulative salary spending within the fiscal year.",                                                                        related:"Compare with Period to Date Salary and FTD-Cumulative Salary." },
+  ftd_fringe:       { label:'FTD Fringe',                 what:"Fringe expense recorded from the start of the fiscal year through the current period.",              interpret:"This is the year-to-date fringe total.",                                                                                                               why:"It helps users understand the full year-to-date payroll burden beyond salary alone.",                                                              related:"Use with FTD Salary and FTD-Cumulative Fringe." },
+  ftd_encum_salary: { label:'FTD - Encum Salary',         what:"Salary encumbrances expected within the fiscal year. How much more salary is expected to be charged from now through June 30th?", interpret:"This reflects future salary commitments that have not yet posted as actuals.",                                                            why:"It helps departments forecast payroll obligations and monitor remaining available funding.",                                                        related:"Use with Encumbrance Start Date, Encumbrance End Date, and FTD Salary." },
+  ftd_encum_fringe: { label:'FTD - Encum Fringe',         what:"Fringe encumbrances expected within the fiscal year. How much more fringe is expected to be charged from now through June 30th?", interpret:"This reflects future fringe commitments tied to expected payroll.",                                                                    why:"It helps users understand the future burden associated with salary commitments.",                                                                   related:"Use with FTD - Encum Salary and the encumbrance dates." },
+  enc_start_date:   { label:'Encumbrance Start Date',     what:"The date the payroll encumbrance begins. This aligns with the next pay period.",                    interpret:"This marks the start of the future payroll commitment period.",                                                                                        why:"It helps determine when projected payroll obligations begin.",                                                                                     related:"Use with Encumbrance End Date and encumbrance salary/fringe/GRA fields." },
+  enc_end_date:     { label:'Encumbrance End Date',       what:"The date the payroll encumbrance ends. This aligns with the end date of a Salary Distribution entered in PAC.", interpret:"This marks the end of the future payroll commitment period.",                                                                              why:"It helps users identify how long a payroll commitment is expected to continue.",                                                                   related:"Use with Encumbrance Start Date and encumbrance salary/fringe/GRA fields." },
+  ftd_cum_salary:   { label:'FTD-Cumulative Salary',      what:"Cumulative salary total through the current fiscal year.",                                           interpret:"This reflects salary accumulation over time rather than only the current period.",                                                                  why:"It gives users a broader fiscal-year view of payroll build-up.",                                                                                   related:"Compare with FTD Salary and PTD-Cumulative Salary." },
+  ftd_cum_fringe:   { label:'FTD-Cumulative Fringe',      what:"Cumulative fringe total through the current fiscal year.",                                           interpret:"This reflects fringe accumulation over time within the fiscal year.",                                                                               why:"It provides a more complete picture of payroll burden over time.",                                                                                  related:"Compare with FTD Fringe and PTD-Cumulative Fringe." },
+  ptd2_salary:      { label:'PTD Salary',                 what:"Cumulative Project to Date salary activity.",                                                        interpret:"This field should be read alongside the report's other PTD fields to understand salary in the relevant time context presented.",                    why:"It helps users isolate salary activity in the report's PTD view for reconciliation and analysis.",                                                 related:"Use with PTD Fringe and PTD-Cumulative Salary." },
+  ptd2_fringe:      { label:'PTD Fringe',                 what:"Cumulative Project to Date Fringe.",                                                                 interpret:"This reflects fringe charges associated with the same PTD time context as the salary field.",                                                        why:"It helps users capture the full payroll cost in the PTD view.",                                                                                    related:"Use with PTD Salary and PTD-Cumulative Fringe." },
+  ptd_encum_salary: { label:'PTD - Encum Salary',         what:"Remaining salary encumbrances through the project end date. How much more salary is expected to hit for this person from now through the end of the project?", interpret:"This represents projected salary commitments that have not yet posted as actual payroll expense.", why:"It helps identify future salary obligations in the PTD reporting view.",                                                                related:"Use with PTD - Encum Fringe and encumbrance dates." },
+  ptd_encum_fringe: { label:'PTD - Encum Fringe',         what:"Project to Date Fringe encumbrances — how much more fringe is expected through the remainder of the fiscal year (June 30th).", interpret:"This reflects projected fringe obligations associated with salary encumbrances.",                                                   why:"It helps complete the picture of total future payroll commitment.",                                                                                 related:"Use with PTD - Encum Salary and encumbrance dates." },
+  ptd_cum_salary:   { label:'PTD-Cumulative Salary',      what:"The Project to Date cumulative salary.",                                                             interpret:"This shows how salary totals build over the relevant PTD time frame.",                                                                               why:"It helps users see payroll progression over time rather than only isolated period activity.",                                                       related:"Compare with PTD Salary and FTD-Cumulative Salary." },
+  ptd_cum_fringe:   { label:'PTD-Cumulative Fringe',      what:"The Project to Date cumulative fringe amount.",                                                      interpret:"This shows how fringe totals build over the relevant PTD time frame.",                                                                               why:"It helps users understand total payroll burden progression over time.",                                                                             related:"Compare with PTD Fringe and FTD-Cumulative Fringe." },
+  proj_act_start:   { label:'Proj Act Start Date',        what:"The start date of the project activity.",                                                            interpret:"This marks when the activity became active for charging or tracking.",                                                                                why:"It helps determine whether payroll charges align with the valid activity period.",                                                                  related:"Use with Proj Act End Date, Project, and Proj Activity." },
+  proj_act_end:     { label:'Proj Act End Date',          what:"The end date of the project activity.",                                                              interpret:"This marks when the activity is scheduled to end.",                                                                                                    why:"It helps identify whether charges or encumbrances fall outside the intended activity period.",                                                     related:"Use with Proj Act Start Date, Project, and Proj Activity." },
+  ptd_gra:          { label:'Period to Date GRA',         what:"Graduate Research Assistant payroll expense recorded in the current period.",                        interpret:"This shows GRA cost that posted in the current accounting period only.",                                                                             why:"It helps departments monitor graduate student payroll activity month by month.",                                                                    related:"Compare with FTD GRA and PTD-Cumulative GRA." },
+  ftd_gra:          { label:'FTD GRA',                    what:"Graduate Research Assistant payroll expense recorded from the start of the fiscal year through the current period.", interpret:"This is the year-to-date GRA total.",                                                                                             why:"It is important for monitoring student support costs on grants and projects.",                                                                      related:"Compare with Period to Date GRA and FTD-Cumulative GRA." },
+  ftd_encum_gra:    { label:'FTD - Encum GRA',            what:"Future GRA payroll commitments expected within the fiscal year.",                                    interpret:"This reflects anticipated GRA payroll that has not yet posted as actuals.",                                                                        why:"It helps users forecast remaining graduate payroll obligations.",                                                                                   related:"Use with Encumbrance Start Date, Encumbrance End Date, and FTD GRA." },
+  ftd_cum_gra:      { label:'FTD-Cumulative GRA',         what:"Cumulative GRA total through the current fiscal year view.",                                         interpret:"This reflects how GRA costs accumulate over time.",                                                                                                   why:"It provides a more complete view of total graduate payroll burden.",                                                                                related:"Compare with FTD GRA and PTD-Cumulative GRA." },
+  ptd2_gra:         { label:'PTD GRA',                    what:"Graduate Research Assistant payroll activity in the PTD view.",                                      interpret:"This shows GRA expense within the report's PTD time context.",                                                                                         why:"It helps isolate GRA activity for focused review and reconciliation.",                                                                             related:"Use with PTD-Cumulative GRA and PTD - Encum GRA." },
+  ptd_encum_gra:    { label:'PTD - Encum GRA',            what:"Projected GRA payroll commitments in the PTD view.",                                                 interpret:"This shows future GRA obligations not yet posted as actual payroll.",                                                                               why:"It helps users see upcoming graduate payroll commitments before they hit the ledger.",                                                              related:"Use with PTD GRA and encumbrance dates." },
+  ptd_cum_gra:      { label:'PTD-Cumulative GRA',         what:"The cumulative GRA total in the PTD reporting view.",                                                interpret:"This shows how GRA payroll builds across the relevant reporting time frame.",                                                                          why:"It helps users monitor the progression of graduate payroll expense over time.",                                                                     related:"Compare with PTD GRA and FTD-Cumulative GRA." }
+};
+
+var activeHdrEl  = null;
+var activeHdrKey = null;
+
+function openFieldPanel(key, el) {
+  if (activeHdrEl === el) { closeFieldPanel(); return; }
+  var data = EXPLANATIONS[key]; if (!data) return;
+  if (activeHdrEl) activeHdrEl.classList.remove('active');
+  activeHdrEl = el; activeHdrKey = key; el.classList.add('active');
+  document.getElementById('explain-content').innerHTML =
+    '<div class="explain-field-name">' + data.label + '</div>' +
+    '<div class="explain-section"><div class="tip-badge">WHAT IT IS</div><div class="explain-section-body">' + data.what + '</div></div>' +
+    '<div class="explain-section"><div class="tip-badge">HOW TO INTERPRET</div><div class="explain-section-body">' + data.interpret + '</div></div>' +
+    '<div class="explain-section"><div class="tip-badge">WHY IT MATTERS</div><div class="explain-section-body">' + data.why + '</div></div>' +
+    '<div class="explain-section"><div class="tip-badge">RELATED FIELDS</div><div class="explain-section-body">' + data.related + '</div></div>';
+  document.getElementById('explain-panel').classList.add('open');
+  document.getElementById('explain-inner').scrollTop = 0;
+}
+function closeFieldPanel() {
+  walkthroughIndex = -1;
+  var wt = document.querySelector('.pill[data-pill="walkthrough"]'); if (wt) wt.classList.remove('pill-on');
+  document.getElementById('explain-panel').classList.remove('open');
+  if (activeHdrEl) { activeHdrEl.classList.remove('active'); activeHdrEl = null; activeHdrKey = null; }
+}
+document.getElementById('panel-close').addEventListener('click', closeFieldPanel);
+
+// bind header clicks
+document.querySelectorAll('.psr thead th[data-key]').forEach(function(th) {
+  th.addEventListener('click', function(e) {
+    e.stopPropagation();
+    openFieldPanel(this.getAttribute('data-key'), this);
+  });
+});
+
+document.addEventListener('keydown', function(e) {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if (e.key === 'Escape') { closeFieldPanel(); if (pillBarVisible) hidePillBar(); }
+  else if (e.key === 'ArrowUp')    { e.preventDefault(); if (!pillBarVisible) showPillBar(); }
+  else if (e.key === 'ArrowDown')  { e.preventDefault(); if (pillBarVisible) hidePillBar(); }
+  else if (e.key === 'ArrowRight') { e.preventDefault(); if (pillBarVisible) navigatePill(1); }
+  else if (e.key === 'ArrowLeft')  { e.preventDefault(); if (pillBarVisible) navigatePill(-1); }
+});
+</script>
+</body>
+</html>
